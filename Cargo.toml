@@ -1,0 +1,12 @@
+[package]
+name = "httpserver"
+version = "0.1.0"
+authors = ["periodicaidan <periodicaidan@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+lazy_static = "1.4.0"
+ron = "0.5.1"
+serde = { version = "*", features = ["serde_derive"] }
+rustls = "0.16.0"
+webpki-roots = "0.17.0"
