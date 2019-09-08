@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::fs::File;
 use std::sync::Arc;
+use std::borrow::Borrow;
 
 use rustls::{
     Session,
@@ -32,6 +33,7 @@ use rustls::{
 mod thread_pool;
 #[macro_use] mod http;
 mod security;
+mod routing;
 
 use crate::thread_pool::ThreadPool;
 use crate::http::{
@@ -39,7 +41,7 @@ use crate::http::{
     HttpResponse,
     HttpdConfig,
 };
-use std::borrow::Borrow;
+use crate::routing::Router;
 
 enum Stream {
     Insecure(TcpStream),
@@ -73,20 +75,23 @@ impl Write for Stream {
 
 fn main() {
     let config = HttpdConfig::default();
+    let cwd = std::env::current_dir().unwrap();
     println!("{:#?}", config);
     let listener = TcpListener::bind(&format!("{}:{}", config.host, config.port)).unwrap();
     println!("Starting server at {}", listener.local_addr().unwrap());
-    println!("Mounting on {}", std::env::current_dir().unwrap().display());
+    println!("Mounting on {}", cwd.display());
     let pool = ThreadPool::new(config.threads.unwrap_or(1));
+    let router = Router::default_from_directory(&cwd);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         let cfg = config.clone();
-        pool.execute(move || handle_connection(stream, cfg));
+        let rtr = router.clone();
+        pool.execute(move || handle_connection(stream, cfg, rtr));
     }
 }
 
-fn handle_connection(mut socket: TcpStream, config: HttpdConfig) {
+fn handle_connection(mut socket: TcpStream, config: HttpdConfig, router: Router) {
     // A buffer for holding the HTTP request
     let mut buffer = [0; 1048];
 
@@ -128,14 +133,28 @@ fn handle_connection(mut socket: TcpStream, config: HttpdConfig) {
     let request = HttpRequest::new(&request_line);
 
     // Make the response
-    let response = HttpResponse::new(
-        &request,
-        if config.allowed_methods.contains(&request.method.to_string()) {
-            200
-        } else {
-            405
-        }
-    );
+    let path = router.route_to(request.uri);
+
+    #[cfg(target_os="windows")] let os = "Windows";
+    #[cfg(target_os="macos")] let os = "MacOS";
+    #[cfg(target_os="linux")] let os = "Linux";
+    #[cfg(all(not(target_os="linux"), not(target_os="macos"), not(target_os="windows")))] let os = "Unknown";
+    let server_string = format!("Selfish Server v. {} ({})", env!("CARGO_PKG_VERSION"), os);
+    let response = if let Some(pb) = path {
+        HttpResponse::new(
+            &request,
+            &pb,
+            if config.allowed_methods.contains(&request.method.to_string()) {
+                200
+            } else {
+                405
+            }
+        )
+    } else {
+        HttpResponse::not_found(&request)
+    }
+        .with_header("Server", &server_string);
+
 
     let mut response_string = response.to_vectored_bytes();
 

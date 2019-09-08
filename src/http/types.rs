@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use std::env::current_dir;
 use std::str::FromStr;
 
+/*** REQUEST/RESPONSE LOGIC ***/
+
 #[derive(Debug)]
 pub struct HttpRequest<'r> {
     pub method: &'r str,
@@ -64,50 +66,20 @@ pub struct HttpResponse<'r> {
     pub status: u32,
     pub reason: String,
     pub headers: HashMap<&'r str, String>,
-    pub body: Option<Encoded>
+    pub body: Option<Vec<u8>>
 }
 
 impl<'r> HttpResponse<'r> {
-    pub fn new(request: &'r HttpRequest, status: u32) -> Self {
-        let resource = uri_to_path(request.uri); // TODO: Actual routing lol
-
-        if !resource.exists() {
-            return Self::not_found(request);
-        }
-
+    pub fn new(request: &'r HttpRequest, path: &Path, status: u32) -> Self {
         let reason = HTTP_RESPONSE_STATUSES.get(&status).unwrap();
 
-        let file = if resource.is_dir() {
-            if resource.join("index.html").exists() {
-                resource.join("index.html")
-                    .to_string_lossy()
-                    .into_owned()
-            } else if resource.join("index.htm").exists() {
-                resource.join("index.htm")
-                    .to_string_lossy()
-                    .into_owned()
-            } else {
-                String::from(from_cargo!("src/hello.html")) // TODO: Directory listing
-            }
-        } else if resource.is_file() {
-            resource.to_string_lossy().into_owned()
-        } else {
-            return Self::not_found(request);
-        };
-
         let mut headers = HashMap::new();
-        let content_type = ContentType::parse_from_filename(&file);
+        let content_type = ContentType::parse_from_filename(path);
         headers.insert("Content-Type", content_type.to_string());
 
         let body = match request.method {
             "HEAD" => None,
-            "GET" => Some({
-                use self::MediaType::*;
-                match content_type.media_type {
-                    Text(_) => Encoded::Utf8(fs::read_to_string(&file).unwrap()),
-                    _ => Encoded::Bytes(fs::read(&file).unwrap()),
-                }
-            }),
+            "GET" => Some(fs::read(path).unwrap()),
             _ => None
         };
 
@@ -121,7 +93,7 @@ impl<'r> HttpResponse<'r> {
     }
 
     /// Creates a 404 response
-    fn not_found(request: &'r HttpRequest) -> Self {
+    pub fn not_found(request: &'r HttpRequest) -> Self {
         let mut headers = HashMap::new();
         headers.insert("Content-Type", "text/html; charset=utf-8".to_string());
 
@@ -130,23 +102,9 @@ impl<'r> HttpResponse<'r> {
             status: 404,
             reason: HTTP_RESPONSE_STATUSES.get(&404).unwrap().to_string(),
             headers,
-            body: Some(Encoded::Utf8(fs::read_to_string(from_cargo!("src/error_pages/404.html")).unwrap().to_string()))
+            body: Some(fs::read(from_cargo!("src/error_pages/404.html")).unwrap())
         }
     }
-
-//    pub fn to_string(&self) -> String {
-//        let mut string = String::new();
-//        string.push_str(&format!("{} {} {}\r\n", self.version, self.status, &self.reason));
-//        for (k, v) in self.headers.iter() {
-//            string.push_str(&format!("{}: {}\r\n", k, v));
-//        }
-//        string.push_str("\r\n");
-//        if let Some(b) = &self.body {
-//            string.push_str(&format!("{}", b));
-//        }
-//
-//        string
-//    }
 
     pub fn with_header(mut self, k: &'r str, v: &'r str) -> Self {
         self.headers.entry(k)
@@ -171,21 +129,14 @@ impl<'r> HttpResponse<'r> {
         });
 
         if let Some(body) = &self.body {
-            bytes.extend_from_slice(match body {
-                Encoded::Utf8(s) => s.as_bytes(),
-                Encoded::Bytes(b) => &b,
-            });
+            bytes.extend_from_slice(&body);
         }
 
         bytes
     }
 }
 
-#[derive(Debug)]
-pub enum Encoded {
-    Utf8(String),
-    Bytes(Vec<u8>),
-}
+/*** CONTENT TYPES ***/
 
 pub struct ContentType<'c> {
     pub media_type: MediaType<'c>,
@@ -201,17 +152,16 @@ impl<'c> ContentType<'c> {
         }
     }
 
-    pub fn parse_from_filename(file: &str) -> Self {
+    pub fn parse_from_filename(file: &Path) -> Self {
         use self::MediaType::*;
-        let file_with_ext = Path::new(file);
-        if file_with_ext.is_dir() {
+        if file.is_dir() {
             return Self {
                 media_type: Text("html"),
                 parameter: Some(("charset", "utf-8"))
             };
         }
 
-        let media_type = match file_with_ext.extension() {
+        let media_type = match file.extension() {
             Some(ext) => {
                 let extension = ext.to_str().unwrap();
                 match extension {
@@ -230,7 +180,7 @@ impl<'c> ContentType<'c> {
         };
 
         let parameter = match media_type {
-            Text("html") => Some(("encoding", "utf-8")),
+            Text("html") => Some(("charset", "utf-8")),
             _ => None
         };
 
@@ -266,6 +216,8 @@ impl<'m> MediaType<'m> {
         }
     }
 }
+
+/*** CONFIG FILE ***/
 
 /// Configuration details for the HTTP daemon (i.e., the server)
 ///

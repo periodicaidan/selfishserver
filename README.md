@@ -23,11 +23,11 @@ featured I'll make this but hopefully I can make turn it into something rudiment
 
 ## Todo
 
-- Routing (or better routing)
 - Logging
-- More robust multi-threading
+- More rigorous content negotiation
 - Better session management
 - Proper command line interface
+- More robust multi-threading
 - Better file organization
 
 ## Further down the Line
