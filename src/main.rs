@@ -74,8 +74,14 @@ impl Write for Stream {
 }
 
 fn main() {
-    let config = HttpdConfig::default();
+    let args: Vec<String> = std::env::args().collect();
     let cwd = std::env::current_dir().unwrap();
+
+    let config = match args.get(1) {
+        Some(a) => HttpdConfig::new(&std::fs::read_to_string(a).unwrap()),
+        None => HttpdConfig::default()
+    };
+
     println!("{:#?}", config);
     let listener = TcpListener::bind(&format!("{}:{}", config.host, config.port)).unwrap();
     println!("Starting server at {}", listener.local_addr().unwrap());
@@ -126,7 +132,7 @@ fn handle_connection(mut socket: TcpStream, config: HttpdConfig, router: Router)
     };
 
     // Read the request from the peer into the buffer
-    stream.read(&mut buffer);
+    stream.read(&mut buffer).unwrap();
 
     let request_line = String::from_utf8_lossy(&mut buffer);
     println!("{}", request_line);

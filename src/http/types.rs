@@ -233,8 +233,8 @@ pub struct HttpdConfig {
 }
 
 impl HttpdConfig {
-    fn new(config_file: &str) -> Self {
-        ron::de::from_str::<Self>(config_file).unwrap()
+    pub fn new(config_file: &str) -> Self {
+        ron::de::from_str(config_file).unwrap()
     }
 }
 
