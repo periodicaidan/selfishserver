@@ -29,7 +29,6 @@ impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Self {
         let thread = thread::spawn(move || {
             loop {
-
                 let message = receiver.lock().unwrap()
                     .recv().unwrap();
 

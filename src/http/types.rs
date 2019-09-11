@@ -60,7 +60,6 @@ impl fmt::Display for HttpRequest<'_> {
     }
 }
 
-#[derive(Debug)]
 pub struct HttpResponse<'r> {
     pub version: &'r str,
     pub status: u32,
@@ -97,10 +96,16 @@ impl<'r> HttpResponse<'r> {
         let mut headers = HashMap::new();
         headers.insert("Content-Type", "text/html; charset=utf-8".to_string());
 
+        // For some reason trying to access this causes a panic because it returns None (on MacOS)
+        let status_text = match HTTP_RESPONSE_STATUSES.get(&404) {
+            Some(s) => s.to_string(),
+            None => String::from("Not Found")
+        };
+
         Self {
             version: request.version,
             status: 404,
-            reason: HTTP_RESPONSE_STATUSES.get(&404).unwrap().to_string(),
+            reason: status_text,
             headers,
             body: Some(fs::read(from_cargo!("src/error_pages/404.html")).unwrap())
         }
@@ -133,6 +138,23 @@ impl<'r> HttpResponse<'r> {
         }
 
         bytes
+    }
+
+    /// Returns a string with the response line and the headers, without the body since that's not UTF-8 safe
+    pub fn get_header_string(&self) -> String {
+        let mut head = format!("{} {} {}\r\n", &self.version, self.status, &self.reason);
+        for (k, v) in self.headers.iter() {
+            head.push_str(&format!("{}: {}\r\n", k, v));
+        }
+        head.push_str("\r\n");
+
+        head
+    }
+}
+
+impl fmt::Debug for HttpRespnse {
+    fn fmt(&mut self, f: fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &self.get_header_string())
     }
 }
 

@@ -1,8 +1,11 @@
 [package]
-name = "httpserver"
-version = "0.1.1-beta"
-authors = ["periodicaidan <periodicaidan@gmail.com>"]
+name = "selfserve"
+version = "0.1.2-beta"
+authors = ["Aidan T. Manning <periodicaidan@gmail.com>"]
 edition = "2018"
+description = "An HTTP server I made for purely selfish reasons"
+repository = "https://github.com/periodicaidan/selfishserver"
+license = "MIT"
 
 [dependencies]
 lazy_static = "1.4.0"
@@ -10,3 +13,6 @@ ron = "0.5.1"
 serde = { version = "*", features = ["serde_derive"] }
 rustls = "0.16.0"
 webpki-roots = "0.17.0"
+
+[profile.release]
+lto = true
