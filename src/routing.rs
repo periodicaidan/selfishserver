@@ -6,14 +6,13 @@ use std::fmt;
 use percent_encoding::{
     AsciiSet,
     CONTROLS,
-    NON_ALPHANUMERIC,
     utf8_percent_encode,
     percent_decode_str
 };
 
 type Routes = HashMap<String, PathBuf>;
 
-const FRAGMENTS: &AsciiSet = NON_ALPHANUMERIC;
+const FRAGMENTS: &AsciiSet = &CONTROLS.add(b' ').add(b'%');
 
 #[derive(Clone)]
 pub struct Router {
@@ -31,6 +30,7 @@ impl Router {
         }
     }
 
+    #[inline]
     pub fn route_to_new(&mut self, uri: &str, path: &Path) -> Option<PathBuf> {
         if path.exists() {
             self.routes.insert(String::from(uri), path.to_owned());

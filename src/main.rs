@@ -90,7 +90,17 @@ fn main() {
 
     println!("{:#?}", config);
     let listener = TcpListener::bind(&format!("{}:{}", config.host, config.port)).unwrap();
-    println!("Starting server at {}", listener.local_addr().unwrap());
+    let protocol = if let Some(sec) = &config.security {
+        if sec.use_tls {
+            "https"
+        } else {
+            "http"
+        }
+    } else {
+        "http"
+    };
+
+    println!("Starting server at {}://{}", protocol, listener.local_addr().unwrap());
     println!("Mounting on {}", cwd.display());
     let pool = ThreadPool::new(config.threads.unwrap_or(1));
     let router = Arc::new(RwLock::new(Router::default_from_directory(&cwd)));
@@ -150,8 +160,9 @@ fn handle_connection(
     stream.read(&mut buffer).unwrap();
 
     let request_line = String::from_utf8_lossy(&mut buffer);
-//    println!("{}", request_line);
     let request = HttpRequest::new(&request_line);
+
+    println!("{}", &request.status_string());
 
     // Get the corresponding path if it exists
     let mut path = {

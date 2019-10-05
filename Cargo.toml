@@ -1,6 +1,6 @@
 [package]
 name = "selfserve"
-version = "0.1.2-beta"
+version = "0.1.4-beta"
 authors = ["Aidan T. Manning <periodicaidan@gmail.com>"]
 edition = "2018"
 description = "An HTTP server I made for purely selfish reasons"
@@ -14,6 +14,7 @@ serde = { version = "*", features = ["serde_derive"] }
 rustls = "0.16.0"
 percent-encoding = "2.1.0"
 colored = "1.8.0"
+chrono = "0.4.9"
 
 [profile.release]
 lto = true

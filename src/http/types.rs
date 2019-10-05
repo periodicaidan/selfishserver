@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::env::current_dir;
 use std::str::FromStr;
 use colored::*;
+use chrono::prelude::*;
 
 /*** REQUEST/RESPONSE LOGIC ***/
 
@@ -16,7 +17,8 @@ pub struct HttpRequest<'r> {
     pub uri: &'r str,
     pub version: &'r str,
     pub headers: HashMap<&'r str, &'r str>,
-    pub body: Option<String>
+    pub body: Option<String>,
+    pub timestamp: DateTime<Utc>,
 }
 
 impl<'r> HttpRequest<'r> {
@@ -38,6 +40,7 @@ impl<'r> HttpRequest<'r> {
             version: parts[2],
             headers,
             body: None,
+            timestamp: Utc::now(),
         }
     }
 
@@ -54,7 +57,15 @@ impl<'r> HttpRequest<'r> {
         string
     }
 
-//    pub fn status_string()
+    pub fn status_string(&self) -> String {
+        let color = match self.method {
+            "GET" => "green",
+            "HEAD" => "cyan",
+            _ => "white"
+        };
+
+        format!("[{} | {} {}]", self.timestamp.to_rfc2822().italic(), self.method.color(color), self.uri)
+    }
 }
 
 impl fmt::Display for HttpRequest<'_> {
@@ -70,6 +81,7 @@ pub struct HttpResponse<'r> {
     pub headers: HashMap<&'r str, String>,
     pub body: Option<Vec<u8>>,
     pub uri: &'r str,
+    pub timestamp: DateTime<Utc>,
 }
 
 impl<'r> HttpResponse<'r> {
@@ -92,7 +104,8 @@ impl<'r> HttpResponse<'r> {
             reason: reason.to_string(),
             headers,
             body,
-            uri: request.uri
+            uri: request.uri,
+            timestamp: Utc::now(),
         }
     }
 
@@ -113,7 +126,8 @@ impl<'r> HttpResponse<'r> {
             reason: status_text,
             headers,
             body: Some(fs::read(from_cargo!("src/error_pages/404.html")).unwrap()),
-            uri: request.uri
+            uri: request.uri,
+            timestamp: Utc::now(),
         }
     }
 
@@ -168,7 +182,7 @@ impl<'r> HttpResponse<'r> {
             _ => "white",
         };
 
-        format!("[{} {} {}]", &format!("{}", self.status).color(status_color).reversed(), &self.reason.color(status_color), &self.uri)
+        format!("[{} | {} {} {}]", &self.timestamp.to_rfc2822().italic(), &format!("{}", self.status).color(status_color).reversed(), &self.reason.color(status_color), &self.uri)
     }
 }
 
