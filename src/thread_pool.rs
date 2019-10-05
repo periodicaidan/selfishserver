@@ -34,12 +34,12 @@ impl Worker {
 
                 match message {
                     Message::NewJob(job) => {
-                        println!("Worker {} got a job", id);
+                        #[cfg(test)] println!("Worker {} got a job", id);
                         job.call_box();
                     },
 
                     Message::Terminate => {
-                        println!("Terminating worker {}", id);
+                        #[cfg(test)] println!("Terminating worker {}", id);
                         break;
                     }
                 }

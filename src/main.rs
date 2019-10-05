@@ -2,7 +2,7 @@
 #[macro_use] extern crate serde;
 extern crate ron;
 extern crate rustls;
-extern crate webpki_roots;
+extern crate percent_encoding;
 
 use std::net::{
     TcpListener,
@@ -15,7 +15,7 @@ use std::io::{
 use std::collections::HashMap;
 use std::time::Duration;
 use std::fs::File;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::borrow::Borrow;
 
 use rustls::{
@@ -30,6 +30,10 @@ use rustls::{
     PrivateKey
 };
 
+use percent_encoding::{
+    percent_decode_str
+};
+
 mod thread_pool;
 #[macro_use] mod http;
 mod security;
@@ -42,6 +46,8 @@ use crate::http::{
     HttpdConfig,
 };
 use crate::routing::Router;
+use std::path::PathBuf;
+use std::path::Path;
 
 enum Stream {
     Insecure(TcpStream),
@@ -77,17 +83,17 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let cwd = std::env::current_dir().unwrap();
 
-    let config = match args.get(1) {
+    let config = Arc::new(match args.get(1) {
         Some(a) => HttpdConfig::new(&std::fs::read_to_string(a).unwrap()),
         None => HttpdConfig::default()
-    };
+    });
 
     println!("{:#?}", config);
     let listener = TcpListener::bind(&format!("{}:{}", config.host, config.port)).unwrap();
     println!("Starting server at {}", listener.local_addr().unwrap());
     println!("Mounting on {}", cwd.display());
     let pool = ThreadPool::new(config.threads.unwrap_or(1));
-    let router = Router::default_from_directory(&cwd);
+    let router = Arc::new(RwLock::new(Router::default_from_directory(&cwd)));
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -97,7 +103,11 @@ fn main() {
     }
 }
 
-fn handle_connection(mut socket: TcpStream, config: HttpdConfig, router: Router) {
+fn handle_connection(
+    mut socket: TcpStream,
+    config: Arc<HttpdConfig>,
+    router: Arc<RwLock<Router>>
+) {
     // A buffer for holding the HTTP request
     let mut buffer = [0; 1048];
 
@@ -111,7 +121,12 @@ fn handle_connection(mut socket: TcpStream, config: HttpdConfig, router: Router)
     let mut stream = if is_secure {
         // Set up the TLS configurations
         // TODO: This is slow and I should manage sessions rather than remake them each time
-        let mut tls_cfg = ServerConfig::new(AllowAnyAnonymousOrAuthenticatedClient::new(RootCertStore::empty()));
+        let mut tls_cfg = ServerConfig::new(
+            AllowAnyAnonymousOrAuthenticatedClient::new(
+                RootCertStore::empty()
+            )
+        );
+
         tls_cfg.key_log = Arc::new(KeyLogFile::new());
         let certs = load_certs(
             &config.security.clone().unwrap()
@@ -135,17 +150,34 @@ fn handle_connection(mut socket: TcpStream, config: HttpdConfig, router: Router)
     stream.read(&mut buffer).unwrap();
 
     let request_line = String::from_utf8_lossy(&mut buffer);
-    println!("{}", request_line);
+//    println!("{}", request_line);
     let request = HttpRequest::new(&request_line);
 
-    // Make the response
-    let path = router.route_to(request.uri);
+    // Get the corresponding path if it exists
+    let mut path = {
+        let route_reader = router.read().unwrap();
+        route_reader.route_to(request.uri)
+    };
 
-    #[cfg(target_os="windows")] let os = "Windows";
-    #[cfg(target_os="macos")] let os = "MacOS";
+    // If it doesn't exist, try finding the file on disk
+    if path.is_none() {
+        let new_path = percent_decode_str(request.uri)
+            .decode_utf8_lossy()
+            .trim_left_matches("/")
+            .to_string();
+
+        let mut route_writer = router.write().unwrap();
+        path = route_writer.route_to_new(request.uri, Path::new(&new_path));
+    }
+
+    // Create the string for the Server header field
     #[cfg(target_os="linux")] let os = "Linux";
-    #[cfg(all(not(target_os="linux"), not(target_os="macos"), not(target_os="windows")))] let os = "Unknown";
+    #[cfg(target_os="macos")] let os = "MacOS";
+    #[cfg(target_os="windows")] let os = "Windows";
+    #[cfg(not(any(target_os="linux", target_os="macos", target_os="windows")))] let os = "Unknown";
     let server_string = format!("Selfish Server v. {} ({})", env!("CARGO_PKG_VERSION"), os);
+
+    // Make the response
     let response = if let Some(pb) = path {
         HttpResponse::new(
             &request,
@@ -160,6 +192,8 @@ fn handle_connection(mut socket: TcpStream, config: HttpdConfig, router: Router)
         HttpResponse::not_found(&request)
     }
         .with_header("Server", &server_string);
+
+    println!("{}", &response.status_string());
 
 
     let mut response_string = response.to_vectored_bytes();

@@ -3,7 +3,17 @@ use std::collections::HashMap;
 use std::fs;
 use std::fmt;
 
+use percent_encoding::{
+    AsciiSet,
+    CONTROLS,
+    NON_ALPHANUMERIC,
+    utf8_percent_encode,
+    percent_decode_str
+};
+
 type Routes = HashMap<String, PathBuf>;
+
+const FRAGMENTS: &AsciiSet = NON_ALPHANUMERIC;
 
 #[derive(Clone)]
 pub struct Router {
@@ -12,16 +22,23 @@ pub struct Router {
 
 impl Router {
     /// Resolves a URI to a path
-    pub fn route_to(&self, uri: &str) -> Option<&PathBuf> {
-        self.routes.get(uri)
+    #[inline]
+    pub fn route_to(&self, uri: &str) -> Option<PathBuf> {
+        if let Some(pb) = self.routes.get(uri) {
+            Some(pb.clone())
+        } else {
+            None
+        }
     }
 
-    /// Registers a route for the router
-//    pub fn register_route(&mut self, uri: String, path: PathBuf) {
-//        self.routes.entry(uri)
-//            .and_modify(|e| {*e = path})
-//            .or_insert(path);
-//    }
+    pub fn route_to_new(&mut self, uri: &str, path: &Path) -> Option<PathBuf> {
+        if path.exists() {
+            self.routes.insert(String::from(uri), path.to_owned());
+            self.route_to(uri)
+        } else {
+            None
+        }
+    }
 
     /// Creates a set of routes for the given directory
     pub fn default_from_directory(root: &Path) -> Self {
@@ -45,7 +62,7 @@ fn _create_directory_routes(dir: &Path, prefix: &str, routes: &mut Routes) {
     for s in indices.iter() {
         let index = dir.join(s);
         if index.exists() {
-            routes.insert(String::from(prefix), index);
+            routes.insert(utf8_percent_encode(prefix, FRAGMENTS).to_string(), index);
             break;
         }
     }
@@ -72,7 +89,7 @@ fn _create_directory_routes(dir: &Path, prefix: &str, routes: &mut Routes) {
                 _create_directory_routes(&dir.join(&path), &new_prefix, routes);
             } else if abs_path.is_file() {
                 let uri = format!("{}{}", prefix, path.to_str().unwrap().trim_left_matches("./"));
-                routes.insert(uri, dir.join(&path));
+                routes.insert(utf8_percent_encode(&uri, FRAGMENTS).to_string(), dir.join(&path));
             } else {
                 continue;
             }

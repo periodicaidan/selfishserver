@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 use std::path::{Path, PathBuf};
 use std::env::current_dir;
 use std::str::FromStr;
+use colored::*;
 
 /*** REQUEST/RESPONSE LOGIC ***/
 
@@ -52,6 +53,8 @@ impl<'r> HttpRequest<'r> {
 
         string
     }
+
+//    pub fn status_string()
 }
 
 impl fmt::Display for HttpRequest<'_> {
@@ -65,7 +68,8 @@ pub struct HttpResponse<'r> {
     pub status: u32,
     pub reason: String,
     pub headers: HashMap<&'r str, String>,
-    pub body: Option<Vec<u8>>
+    pub body: Option<Vec<u8>>,
+    pub uri: &'r str,
 }
 
 impl<'r> HttpResponse<'r> {
@@ -88,6 +92,7 @@ impl<'r> HttpResponse<'r> {
             reason: reason.to_string(),
             headers,
             body,
+            uri: request.uri
         }
     }
 
@@ -107,7 +112,8 @@ impl<'r> HttpResponse<'r> {
             status: 404,
             reason: status_text,
             headers,
-            body: Some(fs::read(from_cargo!("src/error_pages/404.html")).unwrap())
+            body: Some(fs::read(from_cargo!("src/error_pages/404.html")).unwrap()),
+            uri: request.uri
         }
     }
 
@@ -140,7 +146,8 @@ impl<'r> HttpResponse<'r> {
         bytes
     }
 
-    /// Returns a string with the response line and the headers, without the body since that's not UTF-8 safe
+    /// Returns a string with the response line and the headers, without the body since that's not
+    /// UTF-8 safe
     pub fn get_header_string(&self) -> String {
         let mut head = format!("{} {} {}\r\n", &self.version, self.status, &self.reason);
         for (k, v) in self.headers.iter() {
@@ -150,10 +157,23 @@ impl<'r> HttpResponse<'r> {
 
         head
     }
+
+    pub fn status_string(&self) -> String {
+        let status_color = match self.status {
+            100...199 => "cyan",
+            200...299 => "green",
+            300...399 => "yellow",
+            400...499 => "red",
+            500...599 => "magenta",
+            _ => "white",
+        };
+
+        format!("[{} {} {}]", &format!("{}", self.status).color(status_color).reversed(), &self.reason.color(status_color), &self.uri)
+    }
 }
 
-impl fmt::Debug for HttpRespnse {
-    fn fmt(&mut self, f: fmt::Formatter) -> fmt::Result {
+impl fmt::Debug for HttpResponse<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", &self.get_header_string())
     }
 }
