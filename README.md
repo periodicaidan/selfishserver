@@ -1,10 +1,9 @@
 Selfish Server
 ===
 
-A Rust HTTP server I'm making for my own learning (i.e., for purely selfish reasons)
+Lightweight, configurabl local hosting server for testing web applications.
 
-NB: This is not meant to be a production server! I'm trying to learn for now, competing with Apache and Nginx comes 
-later :)
+A Rust HTTP server I'm making for my own learning (i.e., for purely selfish reasons)
 
 ## Why Am I Doing This? How'd I Get Into It? Where Am I Going?
 
@@ -12,7 +11,7 @@ I started by building on the Python `http.server` module because I needed a loca
 to learn more about network programming. I decided I wanted to go lower level and started by working off the 
 [Building A Multithreaded Webserver](https://doc.rust-lang.org/book/ch20-00-final-project-a-web-server.html) tutorial 
 from the Rust website. (In fact the thread pooling code is basically that code verbatim at the moment.) I don't know how
-featured I'll make this but hopefully I can make turn it into something rudimentary but still usable and practical.
+featured I'll make this but hopefully I can make turn it into something rudimentary but still.
 
 ## Features
 

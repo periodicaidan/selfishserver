@@ -229,6 +229,8 @@ impl<'c> ContentType<'c> {
                     "png" => Image("png"),
                     "svg" => Image("svg+xml"),
                     "json" => Application("json"),
+                    "woff" => Font("woff"),
+                    "woff2" => Font("woff2"),
                     _ => Application("octet-stream"),
                 }
             },
